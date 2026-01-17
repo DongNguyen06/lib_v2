@@ -1,0 +1,70 @@
+Route Mapping Reference
+======================================================================
+
+
+ADMIN Blueprint
+----------------------------------------------------------------------
+url_for('admin_clear_logs')              → url_for('admin.clear_logs')
+url_for('admin_dashboard')               → url_for('admin.dashboard')
+url_for('admin_export_logs')             → url_for('admin.export_logs')
+url_for('admin_save_config')             → url_for('admin.save_config')
+url_for('admin_send_notifications')      → url_for('admin.send_notifications')
+
+API Blueprint
+----------------------------------------------------------------------
+url_for('api_borrow_book')               → url_for('api.borrow_book')
+url_for('api_cancel_borrow')             → url_for('api.cancel_borrow')
+url_for('api_chat_conversations')        → url_for('api.get_conversations')
+url_for('api_chat_messages')             → url_for('api.get_messages')
+url_for('api_chat_staff')                → url_for('api.get_staff')
+url_for('api_chat_unread')               → url_for('api.get_unread_count')
+url_for('api_delete_notification')       → url_for('api.delete_notification')
+url_for('api_get_books')                 → url_for('api.get_books')
+url_for('api_get_notifications')         → url_for('api.get_notifications')
+url_for('api_get_users')                 → url_for('api.get_users')
+url_for('api_manage_favorite')           → url_for('api.manage_favorite')
+url_for('api_read_all_notifications')    → url_for('api.read_all_notifications')
+url_for('api_read_notification')         → url_for('api.read_notification')
+url_for('api_renew_book')                → url_for('api.renew_book')
+url_for('api_send_notification')         → url_for('api.send_notification')
+url_for('cancel_reservation')            → url_for('api.cancel_reservation')
+url_for('delete_review')                 → url_for('api.delete_review')
+url_for('edit_review')                   → url_for('api.edit_review')
+url_for('reserve_book')                  → url_for('api.reserve_book')
+url_for('submit_review')                 → url_for('api.submit_review')
+
+AUTH Blueprint
+----------------------------------------------------------------------
+url_for('forgot_password')               → url_for('auth.forgot_password')
+url_for('login')                         → url_for('auth.login')
+url_for('logout')                        → url_for('auth.logout')
+url_for('register')                      → url_for('auth.register')
+
+MAIN Blueprint
+----------------------------------------------------------------------
+url_for('book_detail')                   → url_for('main.book_detail')
+url_for('chat')                          → url_for('main.chat')
+url_for('home')                          → url_for('main.home')
+url_for('search')                        → url_for('main.search')
+
+STAFF Blueprint
+----------------------------------------------------------------------
+url_for('staff_approve_borrow')          → url_for('staff.approve_borrow')
+url_for('staff_dashboard')               → url_for('staff.dashboard')
+url_for('staff_edit_book')               → url_for('staff.edit_book')
+url_for('staff_process_borrow')          → url_for('staff.process_borrow')
+url_for('staff_process_return')          → url_for('staff.process_return')
+url_for('staff_reject_borrow')           → url_for('staff.reject_borrow')
+url_for('staff_send_notifications')      → url_for('staff.send_notifications')
+
+USER Blueprint
+----------------------------------------------------------------------
+url_for('borrowed_books')                → url_for('user.borrowed_books')
+url_for('dashboard')                     → url_for('user.dashboard')
+url_for('favorites')                     → url_for('user.favorites')
+url_for('notifications')                 → url_for('user.notifications')
+url_for('pay_fine')                      → url_for('user.pay_fine')
+url_for('profile')                       → url_for('user.profile')
+url_for('reservations')                  → url_for('user.reservations')
+url_for('user_dashboard')                → url_for('user.dashboard')
+url_for('user_reservations')             → url_for('user.reservations')

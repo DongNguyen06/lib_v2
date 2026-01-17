@@ -7,9 +7,9 @@
     <!-- Breadcrumb -->
     <nav class="mb-6">
         <ol class="flex items-center gap-2 text-sm text-gray-600">
-            <li><a href="{{ url_for('home') }}" class="hover:text-blue-600">Home</a></li>
+            <li><a href="{{ url_for('main.home') }}" class="hover:text-blue-600">Home</a></li>
             <li><i class="fas fa-chevron-right text-xs"></i></li>
-            <li><a href="{{ url_for('search') }}" class="hover:text-blue-600">Browse</a></li>
+            <li><a href="{{ url_for('main.search') }}" class="hover:text-blue-600">Browse</a></li>
             <li><i class="fas fa-chevron-right text-xs"></i></li>
             <li class="text-gray-900">{{ book.title }}</li>
         </ol>
@@ -195,7 +195,7 @@
                     {% if can_review %}
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
                         <h3 class="text-lg font-semibold text-gray-900 mb-4">Write Your Review</h3>
-                        <form method="POST" action="{{ url_for('submit_review', book_id=book.id) }}">
+                        <form method="POST" action="{{ url_for('api.submit_review', book_id=book.id) }}">
                             <div class="mb-4">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Your Rating</label>
                                 <div class="flex items-center gap-2" id="ratingStars">
@@ -234,7 +234,7 @@
                                     class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
                                 <i class="fas fa-edit mr-1"></i>Edit
                             </button>
-                            <form method="POST" action="{{ url_for('delete_review', review_id=user_review.id) }}" 
+                            <form method="POST" action="{{ url_for('api.delete_review', review_id=user_review.id) }}" 
                                   onsubmit="return confirm('Are you sure you want to delete your review?')" class="inline">
                                 <button type="submit" 
                                         class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
@@ -283,7 +283,7 @@
                         
                         <!-- Delete button for admin -->
                         {% if current_user and current_user.role == 'admin' and review.user_id != current_user.id %}
-                        <form method="POST" action="{{ url_for('delete_review', review_id=review.id, book_id=book.id) if review and book else '#' }}" 
+                        <form method="POST" action="{{ url_for('api.delete_review', review_id=review.id, book_id=book.id) if review and book else '#' }}" 
                               onsubmit="return confirm('Delete this review?')" class="mt-2">
                             <button type="submit" class="text-xs text-red-600 hover:text-red-800">
                                 <i class="fas fa-trash mr-1"></i>Delete
