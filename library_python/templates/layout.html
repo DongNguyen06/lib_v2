@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}City Library{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    
+    <!-- Socket.IO for real-time chat -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen flex flex-col bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo -->
+                <a href="{{ url_for('home') }}" class="flex items-center gap-2">
+                    <i class="fas fa-book-open text-3xl text-blue-600"></i>
+                    <span class="text-xl font-semibold text-gray-900">City Library</span>
+                </a>
+
+                <!-- Search Bar - Desktop -->
+                <form action="{{ url_for('search') }}" method="GET" class="hidden md:flex flex-1 max-w-2xl mx-8">
+                    <div class="relative w-full">
+                        <input
+                            type="text"
+                            name="q"
+                            placeholder="Search books by title, author, or keyword..."
+                            class="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                    </div>
+                </form>
+
+                <!-- Navigation -->
+                <div class="hidden md:flex items-center gap-4">
+                    {% if not current_user %}
+                        <a href="{{ url_for('login') }}" class="px-4 py-2 text-gray-700 hover:text-blue-600">
+                            Login
+                        </a>
+                        <a href="{{ url_for('register') }}" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            Register
+                        </a>
+                    {% else %}
+                        <!-- Notifications (only for users) -->
+                        {% if current_user.role == 'user' %}
+                            <a href="{{ url_for('notifications') }}" class="p-2 text-gray-700 hover:text-blue-600">
+                                <i class="fas fa-bell text-xl"></i>
+                            </a>
+                            
+                            <!-- Chat (for users) -->
+                            <button onclick="openChatWindow()" class="relative p-2 text-gray-700 hover:text-blue-600">
+                                <i class="fas fa-comments text-xl"></i>
+                                <span id="chatBadgeIcon" class="hidden absolute -top-1 -right-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                                    0
+                                </span>
+                            </button>
+                        {% endif %}
+
+                        <!-- Chat (for staff and admin) -->
+                        {% if current_user.role in ['staff', 'admin'] %}
+                            <button onclick="openChatWindow()" class="relative p-2 text-gray-700 hover:text-blue-600">
+                                <i class="fas fa-comments text-xl"></i>
+                                <span id="chatBadgeIcon" class="hidden absolute -top-1 -right-1 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                                    0
+                                </span>
+                            </button>
+                        {% endif %}
+
+                        <!-- User Dropdown -->
+                        <div class="relative" id="userDropdown">
+                            <button onclick="toggleUserDropdown()" class="flex items-center gap-2 px-3 py-2 text-gray-700 hover:text-blue-600">
+                                <i class="fas fa-user-circle text-2xl"></i>
+                                <span>{{ current_user.name }}</span>
+                                <i class="fas fa-chevron-down text-sm"></i>
+                            </button>
+                            
+                            <div id="userDropdownMenu" class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 hidden z-50">
+                                {% if current_user.role == 'user' %}
+                                    <a href="{{ url_for('user_dashboard') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-dashboard mr-2"></i> Dashboard
+                                    </a>
+                                    <a href="{{ url_for('profile') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-user mr-2"></i> Profile
+                                    </a>
+                                    <a href="{{ url_for('borrowed_books') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-book mr-2"></i> Borrowed Books
+                                    </a>
+                                    <a href="{{ url_for('user_reservations') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-bookmark mr-2"></i> My Reservations
+                                    </a>
+                                    <a href="{{ url_for('favorites') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-heart mr-2"></i> Favorites
+                                    </a>
+                                {% elif current_user.role == 'staff' %}
+                                    <a href="{{ url_for('staff_dashboard') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-dashboard mr-2"></i> Staff Dashboard
+                                    </a>
+                                {% elif current_user.role == 'admin' %}
+                                    <a href="{{ url_for('admin_dashboard') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100">
+                                        <i class="fas fa-dashboard mr-2"></i> Admin Dashboard
+                                    </a>
+                                {% endif %}
+                                
+                                <hr class="my-2">
+                                
+                                <a href="{{ url_for('logout') }}" class="block px-4 py-2 text-red-600 hover:bg-gray-100">
+                                    <i class="fas fa-sign-out-alt mr-2"></i> Logout
+                                </a>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Mobile menu button -->
+                <button class="md:hidden p-2 text-gray-700" onclick="toggleMobileMenu()">
+                    <i class="fas fa-bars text-2xl"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="mobileMenu" class="hidden md:hidden border-t border-gray-200">
+            <div class="px-4 py-3 space-y-3">
+                <!-- Mobile Search -->
+                <form action="{{ url_for('search') }}" method="GET">
+                    <input
+                        type="text"
+                        name="q"
+                        placeholder="Search books..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                </form>
+                
+                {% if current_user %}
+                    <a href="{{ url_for('user_dashboard') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded">
+                        Dashboard
+                    </a>
+                    <a href="{{ url_for('logout') }}" class="block px-4 py-2 text-red-600 hover:bg-gray-100 rounded">
+                        Logout
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded">
+                        Login
+                    </a>
+                    <a href="{{ url_for('register') }}" class="block px-4 py-2 bg-blue-600 text-white rounded-lg text-center">
+                        Register
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} p-4 rounded-lg mb-2 {% if category == 'error' %}bg-red-100 text-red-800 border border-red-200{% elif category == 'success' %}bg-green-100 text-green-800 border border-green-200{% elif category == 'warning' %}bg-yellow-100 text-yellow-800 border border-yellow-200{% else %}bg-blue-100 text-blue-800 border border-blue-200{% endif %}">
+                        <div class="flex items-center justify-between">
+                            <span>{{ message }}</span>
+                            <button onclick="this.parentElement.parentElement.remove()" class="text-current opacity-50 hover:opacity-100">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white mt-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">City Library</h3>
+                    <p class="text-gray-400">Your gateway to knowledge and imagination.</p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Quick Links</h3>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><a href="{{ url_for('home') }}" class="hover:text-white">Home</a></li>
+                        <li><a href="{{ url_for('search') }}" class="hover:text-white">Browse Books</a></li>
+                        {% if current_user %}
+                        <li><a href="{{ url_for('user_dashboard') }}" class="hover:text-white">My Dashboard</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Contact</h3>
+                    <ul class="space-y-2 text-gray-400">
+                        <li><i class="fas fa-envelope mr-2"></i> info@citylibrary.com</li>
+                        <li><i class="fas fa-phone mr-2"></i> (555) 123-4567</li>
+                        <li><i class="fas fa-map-marker-alt mr-2"></i> 123 Library St, City</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
+                <p>&copy; 2024 City Library. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function toggleUserDropdown() {
+            const menu = document.getElementById('userDropdownMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('userDropdown');
+            const menu = document.getElementById('userDropdownMenu');
+            
+            if (dropdown && !dropdown.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobileMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        // Auto-hide flash messages after 5 seconds
+        setTimeout(function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                alert.style.transition = 'opacity 0.5s';
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 500);
+            });
+        }, 5000);
+    </script>
+    
+    {% if current_user %}
+    <!-- Real-time Chat Widget -->
+    <div id="chatWidget" class="fixed bottom-4 right-4 z-50 hidden">
+        <div class="bg-white rounded-lg shadow-2xl w-96 h-[500px] flex flex-col">
+            <!-- Chat Header -->
+            <div class="bg-blue-600 text-white p-4 rounded-t-lg flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-comments"></i>
+                    <span class="font-semibold" id="chatPartnerName">Chat with Support</span>
+                </div>
+                <button onclick="closeChatWindow()" class="text-white hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Staff List (for users) / User List (for staff/admin) -->
+            {% if current_user.role == 'user' %}
+            <div id="staffList" class="flex-1 overflow-y-auto p-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Select a staff member to chat:</h3>
+                <div id="staffListContent" class="space-y-2">
+                    <div class="text-center text-gray-500 py-4">
+                        <i class="fas fa-spinner fa-spin"></i> Loading...
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div id="conversationsList" class="flex-1 overflow-y-auto p-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">Recent Conversations:</h3>
+                <div id="conversationsListContent" class="space-y-2">
+                    <div class="text-center text-gray-500 py-4">
+                        <i class="fas fa-spinner fa-spin"></i> Loading...
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Chat Messages -->
+            <div id="chatMessages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50 {% if current_user.role == 'user' %}hidden{% endif %}">
+                <!-- Messages will be inserted here -->
+            </div>
+            
+            <!-- Typing Indicator -->
+            <div id="typingIndicator" class="hidden px-4 py-2 text-sm text-gray-500 italic">
+                <i class="fas fa-ellipsis-h"></i> typing...
+            </div>
+            
+            <!-- Chat Input -->
+            <div id="chatInput" class="p-4 border-t {% if current_user.role == 'user' %}hidden{% else %}hidden{% endif %}">
+                <div class="flex gap-2">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Type a message..." 
+                        class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onkeypress="handleMessageKeyPress(event)"
+                    />
+                    <button 
+                        onclick="sendMessage()" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- SINGLETON SOCKET CONNECTION ---
+        // Sử dụng chung 1 kết nối cho cả Widget và trang Chat riêng
+        if (!window.socket) {
+            window.socket = io();
+        }
+        const socket = window.socket;
+        
+        const currentUserId = '{{ current_user.id }}';
+        let currentChatPartner = null;
+        let isTyping = false;
+        let typingTimeout = null;
+        
+        socket.on('connect', () => console.log('✅ Widget Socket connected'));
+        
+        // --- XỬ LÝ TIN NHẮN ĐẾN ---
+        socket.on('new_message', function(data) {
+            // 1. QUAN TRỌNG: Nếu tin nhắn là do mình gửi -> BỎ QUA (vì đã hiển thị ngay lập tức ở client rồi)
+            if (data.sender_id === currentUserId) return;
+
+            // 2. Nếu tin nhắn từ người đang chat trong Widget -> Hiện lên
+            if (currentChatPartner && data.sender_id === currentChatPartner) {
+                appendMessage(data);
+            }
+            updateUnreadCount();
+        });
+        
+        socket.on('user_typing', function(data) {
+            if (currentChatPartner && data.user_id === currentChatPartner) {
+                const indicator = document.getElementById('typingIndicator');
+                if (data.is_typing) indicator.classList.remove('hidden');
+                else indicator.classList.add('hidden');
+            }
+        });
+        
+        // --- CHAT LOGIC ---
+        function openChatWindow() {
+            document.getElementById('chatWidget').classList.remove('hidden');
+            {% if current_user.role == 'user' %} loadStaffList(); {% else %} loadConversationsList(); {% endif %}
+            updateUnreadCount();
+        }
+        
+        function closeChatWindow() {
+            document.getElementById('chatWidget').classList.add('hidden');
+            currentChatPartner = null;
+            {% if current_user.role == 'user' %} document.getElementById('staffList').classList.remove('hidden'); {% else %} document.getElementById('conversationsList').classList.remove('hidden'); {% endif %}
+            document.getElementById('chatMessages').classList.add('hidden');
+            document.getElementById('chatInput').classList.add('hidden');
+        }
+        
+        // --- GỬI TIN NHẮN VỚI OPTIMISTIC UI ---
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message || !currentChatPartner) return;
+            
+            // 1. Gửi lên server
+            socket.emit('send_message', {
+                receiver_id: currentChatPartner,
+                message: message
+            });
+
+            // 2. HIỆN NGAY LẬP TỨC (Không chờ server)
+            appendMessage({
+                sender_id: currentUserId,
+                message: message,
+                timestamp: new Date().toISOString() // Giả lập thời gian
+            });
+            
+            input.value = '';
+        }
+
+        function appendMessage(msg) {
+            const container = document.getElementById('chatMessages');
+            const isOwn = msg.sender_id === currentUserId;
+            
+            // Xử lý hiển thị thời gian
+            let timeDisplay = 'Just now';
+            if (msg.timestamp) {
+                const date = new Date(msg.timestamp);
+                if (!isNaN(date)) {
+                    timeDisplay = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                }
+            }
+
+            const div = document.createElement('div');
+            div.className = `flex ${isOwn ? 'justify-end' : 'justify-start'}`;
+            div.innerHTML = `
+                <div class="max-w-[70%] ${isOwn ? 'bg-blue-600 text-white' : 'bg-white text-gray-900'} rounded-lg p-3 shadow">
+                    <p class="text-sm break-words">${escapeHtml(msg.message)}</p>
+                    <p class="text-xs ${isOwn ? 'text-blue-100' : 'text-gray-500'} mt-1 text-right">${timeDisplay}</p>
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // --- CÁC HÀM API KHÁC (Load lists...) ---
+        // (Giữ gọn code, logic loadStaffList/loadConversationsList tương tự như cũ nhưng gọi appendMessage mới)
+        {% if current_user.role == 'user' %}
+        function loadStaffList() {
+            fetch('/api/chat/staff').then(r=>r.json()).then(d=>{
+                if(d.success) {
+                    const c = document.getElementById('staffListContent'); c.innerHTML='';
+                    d.staff.forEach(s => {
+                        const el = document.createElement('div');
+                        el.className='p-3 border rounded hover:bg-gray-50 cursor-pointer';
+                        el.innerHTML=`<div class="font-medium">${s.name}</div>`;
+                        el.onclick=()=>startChat(s.id, s.name);
+                        c.appendChild(el);
+                    });
+                }
+            });
+        }
+        {% else %}
+        function loadConversationsList() {
+             fetch('/api/chat/conversations').then(r=>r.json()).then(d=>{
+                if(d.success) {
+                    const c = document.getElementById('conversationsListContent'); c.innerHTML='';
+                    d.conversations.forEach(cv => {
+                        const el = document.createElement('div');
+                        el.className='p-3 border rounded hover:bg-gray-50 cursor-pointer relative';
+                        el.innerHTML=`<div class="font-medium">${cv.partner_name}</div><div class="text-xs text-gray-500 truncate">${cv.last_message||''}</div>`;
+                        if(cv.unread_count>0) el.innerHTML+=`<span class="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 rounded-full">${cv.unread_count}</span>`;
+                        el.onclick=()=>startChat(cv.partner_id, cv.partner_name);
+                        c.appendChild(el);
+                    });
+                }
+            });
+        }
+        {% endif %}
+
+        function startChat(pid, pname) {
+            currentChatPartner = pid;
+            document.getElementById('chatPartnerName').textContent = pname;
+            {% if current_user.role == 'user' %} document.getElementById('staffList').classList.add('hidden'); {% else %} document.getElementById('conversationsList').classList.add('hidden'); {% endif %}
+            document.getElementById('chatMessages').classList.remove('hidden');
+            document.getElementById('chatInput').classList.remove('hidden');
+            
+            const container = document.getElementById('chatMessages'); container.innerHTML = '';
+            fetch(`/api/chat/messages/${pid}`).then(r=>r.json()).then(d=>{
+                if(d.success) {
+                    d.messages.forEach(appendMessage);
+                }
+            });
+        }
+
+        function handleMessageKeyPress(e) {
+            if(e.key==='Enter') sendMessage();
+            else {
+                if(!isTyping){ isTyping=true; socket.emit('typing', {receiver_id: currentChatPartner, is_typing: true}); }
+                clearTimeout(typingTimeout);
+                typingTimeout=setTimeout(()=>{isTyping=false; socket.emit('typing', {receiver_id: currentChatPartner, is_typing: false});}, 1000);
+            }
+        }
+
+        function updateUnreadCount() {
+            fetch('/api/chat/unread').then(r=>r.json()).then(d=>{
+                if(d.success) {
+                    const b1 = document.getElementById('chatBadgeIcon');
+                    if(b1) { b1.textContent=d.count; d.count>0?b1.classList.remove('hidden'):b1.classList.add('hidden'); }
+                }
+            }).catch(()=>{});
+        }
+
+        function escapeHtml(t) { return t?t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"):"" }
+        
+        updateUnreadCount();
+        setInterval(updateUnreadCount, 30000);
+    </script>
+    {% endif %}
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

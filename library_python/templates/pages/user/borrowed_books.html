@@ -1,0 +1,235 @@
+{% extends "layout.html" %}
+
+{% block title %}Borrowed Books - City Library{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-8">My Borrowed Books</h1>
+
+    {% if borrowed_books %}
+    <div class="space-y-4">
+        {% for borrow in borrowed_books %}
+        {% set book = borrow.get_book() %}
+        <div class="bg-white rounded-lg shadow-sm p-6 border-l-4 {% if borrow.is_pending %}border-yellow-400{% elif borrow.is_overdue() %}border-red-500{% else %}border-green-500{% endif %}">
+            <div class="flex gap-6">
+                <img src="{{ book.cover_url }}" alt="{{ book.title }}" class="w-24 h-36 object-cover rounded">
+                
+                <div class="flex-1">
+                    <h3 class="text-xl font-semibold text-gray-900 mb-2">{{ book.title }}</h3>
+                    <p class="text-gray-600 mb-4">by {{ book.author }}</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div>
+                            <p class="text-sm text-gray-600">
+                                {{ "Requested On" if borrow.is_pending else "Borrowed On" }}
+                            </p>
+                            <p class="font-semibold text-gray-900">{{ borrow.borrow_date }}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">
+                                {{ "Pickup Deadline" if borrow.is_pending else "Due Date" }}
+                            </p>
+                            <p class="font-semibold {% if not borrow.is_pending and borrow.is_overdue() %}text-red-600{% endif %}">
+                                {{ borrow.pending_until if borrow.is_pending else borrow.due_date }}
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-600">Status</p>
+                            {% if borrow.is_pending %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                    Pending Pickup
+                                </span>
+                            {% elif borrow.is_overdue() %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                    Overdue
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Borrowed
+                                </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3 items-center">
+                        {% if borrow.can_be_cancelled %}
+                        <button onclick="cancelBorrow('{{ book.id }}')" 
+                                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+                            <i class="fas fa-times-circle mr-2"></i> Cancel Request
+                        </button>
+                        
+                        {% elif borrow.status == 'borrowed' %}
+                            {% if not borrow.is_overdue() and borrow.renewed_count < 1 %}
+                            <button onclick="openRenewModal('{{ book.id }}', '{{ book.title|replace("'", "\\'") }}', {{ borrow.renewed_count }})" 
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                                <i class="fas fa-redo mr-2"></i> Renew
+                            </button>
+                            {% endif %}
+                            
+                            <div class="text-sm text-gray-500 bg-gray-50 px-3 py-2 rounded border border-gray-200">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                To return, please bring book to the library counter.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+        <i class="fas fa-book text-6xl text-gray-300 mb-4"></i>
+        <h3 class="text-xl font-semibold text-gray-900 mb-2">No borrowed books</h3>
+        <p class="text-gray-600 mb-6">Start browsing our collection to borrow books</p>
+        <a href="{{ url_for('search') }}" class="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+            Browse Books
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Renew Modal -->
+<div id="renewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full transform transition-all">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-2xl font-bold text-gray-900">
+                    <i class="fas fa-redo text-blue-600 mr-2"></i>Renew Book
+                </h3>
+                <button onclick="closeRenewModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            
+            <div class="mb-4">
+                <p class="text-gray-700 mb-2">Book: <strong id="modalBookTitle"></strong></p>
+                <p class="text-sm text-gray-600" id="modalRenewalInfo"></p>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <p class="text-sm text-blue-800 mb-2">
+                    <i class="fas fa-info-circle mr-2"></i><strong>Renewal Policy:</strong>
+                </p>
+                <ul class="text-sm text-blue-700 space-y-1 ml-6">
+                    <li>• Maximum 1 renewal per book</li>
+                    <li>• Cannot renew if someone reserved this book</li>
+                    <li>• Cannot renew overdue books</li>
+                    <li>• Extension: 1-7 days from current due date</li>
+                </ul>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Choose extension days (1-7 days):
+                </label>
+                <input type="number" id="renewDays" min="1" max="7" value="7" 
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center text-2xl font-bold">
+                <p class="text-xs text-gray-500 mt-2 text-center">The book will be extended by the selected number of days</p>
+            </div>
+            
+            <div class="flex gap-3">
+                <button type="button" onclick="closeRenewModal()" 
+                        class="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-semibold transition-all">
+                    <i class="fas fa-times mr-2"></i> Cancel
+                </button>
+                <button type="button" onclick="confirmRenew()" 
+                        class="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold transition-all shadow-lg">
+                    <i class="fas fa-check mr-2"></i> Confirm Renew
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Cancel borrow request for a specific book (pending_pickup only)
+function cancelBorrow(bookId) {
+    if (!confirm('Are you sure you want to cancel this borrow request?')) {
+        return;
+    }
+
+    fetch(`/api/cancel/${bookId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.message);
+        if (data.success) {
+            window.location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+    });
+}
+
+let currentBookId = null;
+
+function openRenewModal(bookId, bookTitle, renewedCount) {
+    currentBookId = bookId;
+    document.getElementById('modalBookTitle').textContent = bookTitle;
+    
+    const remainingRenewals = 1 - renewedCount;
+    const infoText = remainingRenewals > 0 
+        ? `You have ${remainingRenewals} renewal remaining for this book.`
+        : 'You have reached the maximum renewal limit for this book.';
+    document.getElementById('modalRenewalInfo').textContent = infoText;
+    
+    document.getElementById('renewModal').classList.remove('hidden');
+}
+
+function closeRenewModal() {
+    document.getElementById('renewModal').classList.add('hidden');
+    currentBookId = null;
+}
+
+function confirmRenew() {
+    const days = parseInt(document.getElementById('renewDays').value);
+    
+    if (days < 1 || days > 7) {
+        alert('Please enter a number between 1 and 7');
+        return;
+    }
+    
+    if (!currentBookId) {
+        alert('Error: Book ID not found');
+        return;
+    }
+    
+    // Send renewal request
+    fetch(`/api/renew/${currentBookId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ days: days })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Renewal failed: ' + data.message);
+        }
+        closeRenewModal();
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+        closeRenewModal();
+    });
+}
+
+// Close modal when clicking outside
+document.getElementById('renewModal').addEventListener('click', function(e) {
+    if (e.target.id === 'renewModal') {
+        closeRenewModal();
+    }
+});
+</script>
+{% endblock %}
