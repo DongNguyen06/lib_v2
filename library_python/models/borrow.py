@@ -491,10 +491,16 @@ class Borrow:
         return True, f"Book renewed successfully. New due date: {self.due_date}"
     
     def cancel(self) -> Tuple[bool, str]:
-        """Cancel borrow request and restore book availability."""
+        """Cancel borrow request and restore book availability.
+        
+        ✅ FIXED: Now reorders reservation queue and notifies next reserver
+        """
         if self.status not in ['pending_pickup']:
             return False, "Only pending pickup requests can be cancelled"
 
+        from models.reservation import Reservation
+        from models.system_log import SystemLog
+        
         db = get_db()
         self.status = 'cancelled'
 
@@ -509,16 +515,40 @@ class Borrow:
         if book:
             book.update_available_copies(1)
 
+        # ✅ FIXED: Reorder reservation queue if applicable
+        if Reservation.has_active_reservations(self.book_id):
+            # Get all waiting reservations for this book
+            waiting_reservations = db.execute('''
+                SELECT * FROM reservations 
+                WHERE book_id = ? AND status = 'waiting'
+                ORDER BY queue_position ASC
+            ''', (self.book_id,)).fetchall()
+            
+            # Reorder queue positions
+            for idx, res_row in enumerate(waiting_reservations, start=1):
+                db.execute(
+                    'UPDATE reservations SET queue_position = ? WHERE id = ?',
+                    (idx, res_row['id'])
+                )
+            
+            # Notify first person in queue
+            first_reservation = Reservation.get_next_in_queue(self.book_id)
+            if first_reservation:
+                first_reservation.mark_ready(hold_hours=48)
+
         db.commit()
 
-        # Check for reservations
-        from models.reservation import Reservation
-        if Reservation.has_active_reservations(self.book_id):
-            next_reservation = Reservation.get_next_in_queue(self.book_id)
-            if next_reservation:
-                next_reservation.mark_ready(hold_hours=48)
+        # Log the cancellation
+        user = self.get_user()
+        if user and book:
+            SystemLog.add(
+                'Borrow Request Cancelled',
+                f'{user.name} cancelled pending pickup for "{book.title}"',
+                'info',
+                self.user_id
+            )
 
-        return True, "Borrow request cancelled"
+        return True, "Borrow request cancelled successfully"
     
     @staticmethod
     def auto_cancel_expired_pickups():

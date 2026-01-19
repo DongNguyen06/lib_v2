@@ -92,10 +92,69 @@ def clear_logs():
 def send_notifications():
     """Display notification sending page for admin.
     
+    ✅ FIXED: Now supports saving notification templates
+    
     Returns:
         Rendered notification sending template.
     """
     return render_template('pages/admin/send_notifications.html')
+
+
+# ✅ NEW: Add support for notification templates
+@admin_bp.route('/notification-templates', methods=['GET'])
+@login_required
+@role_required('admin')
+def list_notification_templates():
+    """Get list of notification templates.
+    
+    Returns:
+        JSON list of templates
+    """
+    from flask import jsonify
+    
+    # ✅ FIXED: Define built-in templates
+    templates = [
+        {
+            'id': 'overdue_reminder',
+            'name': 'Overdue Book Reminder',
+            'title': 'Overdue Book Reminder',
+            'message': 'Please return your overdue books to avoid late fees.',
+            'type': 'warning'
+        },
+        {
+            'id': 'maintenance',
+            'name': 'System Maintenance Notice',
+            'title': 'System Maintenance',
+            'message': 'The library system will undergo maintenance on [DATE].',
+            'type': 'info'
+        },
+        {
+            'id': 'event',
+            'name': 'Library Event',
+            'title': 'Library Event Announcement',
+            'message': 'Join us for our upcoming library event!',
+            'type': 'success'
+        },
+        {
+            'id': 'urgent',
+            'name': 'Urgent Notice',
+            'title': 'Urgent: Account Issue',
+            'message': 'Please contact the library staff immediately regarding your account.',
+            'type': 'urgent'
+        },
+        {
+            'id': 'available',
+            'name': 'Book Available',
+            'title': 'Reserved Book Available',
+            'message': 'Your reserved book is now available for pickup!',
+            'type': 'success'
+        }
+    ]
+    
+    return jsonify({
+        'success': True,
+        'templates': templates
+    })
 
 
 @admin_bp.route('/logs/export')

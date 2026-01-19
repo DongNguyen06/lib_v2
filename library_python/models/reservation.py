@@ -243,6 +243,8 @@ class Reservation:
     def mark_ready(self, hold_hours: int = 48) -> Tuple[bool, str]:
         """Mark reservation as ready for pickup.
         
+        ✅ FIXED: More reliable notification system
+        
         Args:
             hold_hours: How many hours to hold the book (default 48).
             
@@ -251,6 +253,9 @@ class Reservation:
         """
         if self.status != 'waiting':
             return False, "Only waiting reservations can be marked ready"
+        
+        from models.notification import Notification
+        from models.system_log import SystemLog
         
         db = get_db()
         now = datetime.now()
@@ -261,27 +266,41 @@ class Reservation:
         self.notified_date = notified_date
         self.hold_until = hold_until
         
-        db.execute('''
-            UPDATE reservations 
-            SET status = ?, notified_date = ?, hold_until = ?
-            WHERE id = ?
-        ''', ('ready', notified_date, hold_until, self.id))
-        db.commit()
-        
-        # Send notification to user
-        from models.notification import Notification
-        from models.book import Book
-        book = Book.get_by_id(self.book_id)
-        if book:
-            Notification.create(
-                self.user_id,
-                'success',
-                'Reserved Book Available',
-                f'Your reserved book "{book.title}" is now available! '
-                f'Please pick it up before {hold_until}.'
-            )
-        
-        return True, "Reservation marked as ready"
+        try:
+            # Update reservation status
+            db.execute('''
+                UPDATE reservations 
+                SET status = ?, notified_date = ?, hold_until = ?
+                WHERE id = ?
+            ''', ('ready', notified_date, hold_until, self.id))
+
+            # ✅ FIXED: Ensure notification is created before commit
+            book = Book.get_by_id(self.book_id)
+            if book:
+                notif = Notification.create(
+                    user_id=self.user_id,
+                    notification_type='success',
+                    title='Reserved Book Available',
+                    message=f'Your reserved book "{book.title}" is now available! '
+                            f'Please pick it up before {hold_until}. '
+                            f'If not picked up within {hold_hours} hours, the reservation will expire.'
+                )
+                
+                # Log the notification
+                if notif:
+                    SystemLog.add(
+                        'Reservation Ready',
+                        f'User notified that "{book.title}" is ready for pickup. '
+                        f'Hold until: {hold_until}',
+                        'info',
+                        self.user_id
+                    )
+            
+            db.commit()
+            return True, "Reservation marked as ready and notification sent"
+        except Exception as e:
+            db.rollback()
+            return False, f"Failed to mark reservation as ready: {str(e)}"
     
     def cancel(self) -> Tuple[bool, str]:
         """Cancel the reservation.

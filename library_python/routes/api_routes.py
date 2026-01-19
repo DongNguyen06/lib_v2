@@ -49,13 +49,37 @@ def get_books():
 def borrow_book(book_id: str):
     """Create a borrow request for a book.
     
+    ✅ FIXED: Now sends notification to user confirming the borrow request
+    
     Args:
         book_id: Book identifier.
     
     Returns:
         JSON response with success status and message.
     """
+    from models.notification import Notification
+    
     borrow, message = Borrow.create(session['user_id'], book_id)
+    
+    # ✅ FIXED: Send notification when borrow request is successful
+    if borrow:
+        user = User.get_by_id(session['user_id'])
+        book = Book.get_by_id(book_id)
+        
+        if user and book:
+            # Calculate pickup deadline
+            from datetime import datetime, timedelta
+            pickup_deadline = (datetime.now() + timedelta(hours=48)).strftime('%Y-%m-%d %H:%M:%S')
+            
+            Notification.create(
+                user_id=session['user_id'],
+                notification_type='success',
+                title='Book Hold Confirmed',
+                message=f'Your hold on "{book.title}" has been confirmed. '
+                        f'Please pick it up within 48 hours ({pickup_deadline}). '
+                        f'The due date will be 14 days from pickup.'
+            )
+    
     return jsonify({
         'success': borrow is not None,
         'message': message
@@ -441,8 +465,11 @@ def get_unread_count():
 
 @api_bp.route('/reviews/<book_id>', methods=['POST'])
 @login_required
+@role_required('user')  # STRICT: Only regular users can review
 def submit_review(book_id: str):
     """Submit a review for a book.
+    
+    Restricted to regular users only. Admin and Staff cannot submit reviews.
     
     Args:
         book_id: Book identifier.
@@ -455,29 +482,33 @@ def submit_review(book_id: str):
         Redirect to book detail page.
     """
     from flask import flash, redirect, url_for
-    
+    # Verify user role (double-check)
+    user = User.get_by_id(session['user_id'])
+    if not user or user.role != 'user':
+        flash('Only library members can submit reviews', 'error')
+        return redirect(url_for('main.book_detail', book_id=book_id))
     rating = request.form.get('rating')
     comment = request.form.get('comment')
-    
     review, message = Review.create(
         session['user_id'],
         book_id,
         rating,
         comment
     )
-    
     if review:
         flash('Review submitted', 'success')
     else:
         flash(message, 'error')
-    
     return redirect(url_for('main.book_detail', book_id=book_id))
 
 
 @api_bp.route('/reviews/<review_id>/edit', methods=['POST'])
 @login_required
+@role_required('user')  # STRICT: Only regular users
 def edit_review(review_id: str):
     """Edit an existing review.
+    
+    Restricted to regular users only. Users can only edit their own reviews.
     
     Args:
         review_id: Review identifier.
@@ -490,10 +521,12 @@ def edit_review(review_id: str):
         Redirect to book detail page.
     """
     from flask import flash, redirect, url_for
-    
+    user = User.get_by_id(session['user_id'])
+    if not user or user.role != 'user':
+        flash('Only library members can edit reviews', 'error')
+        return redirect(url_for('main.home'))
     rating = request.form.get('rating')
     comment = request.form.get('comment', '')
-    
     review = Review.get_by_id(review_id)
     if not review:
         success, message = False, "Review not found"
@@ -501,43 +534,45 @@ def edit_review(review_id: str):
         success, message = False, "You can only edit your own reviews"
     else:
         success, message = review.update(rating, comment)
-    
     flash(message, 'success' if success else 'error')
-    
     # Get book_id for redirect
     review_obj = Review.get_by_id(review_id)
     book_id = review_obj.book_id if review_obj else request.args.get('book_id')
-    
     return redirect(url_for('main.book_detail', book_id=book_id))
 
 
 @api_bp.route('/reviews/<review_id>/delete', methods=['POST'])
 @login_required
+@role_required('user')  # STRICT: Only regular users
 def delete_review(review_id: str):
     """Delete a review.
+    
+    Restricted to regular users only. Users can only delete their own reviews.
+    Admin and Staff cannot delete reviews.
     
     Args:
         review_id: Review identifier.
     
     Returns:
-        Redirect to book detail page.
+        Redirect to book detail page or home.
     """
     from flask import flash, redirect, url_for
-    
     user = User.get_by_id(session['user_id'])
+    # Double-check user role
+    if not user or user.role != 'user':
+        flash('Only library members can delete reviews', 'error')
+        return redirect(url_for('main.home'))
     review = Review.get_by_id(review_id)
-    
     if not review:
         success, message = False, "Review not found"
-    elif review.user_id != user.id and not user.is_admin():
-        success, message = False, "Unauthorized"
+    elif review.user_id != user.id:
+        # REMOVED: and not user.is_admin()
+        # Now ONLY the author can delete
+        success, message = False, "You can only delete your own reviews"
     else:
         success, message = Review.delete(review_id)
-    
     flash(message, 'success' if success else 'error')
-    
     book_id = request.args.get('book_id')
     if book_id:
         return redirect(url_for('main.book_detail', book_id=book_id))
-    
     return redirect(url_for('main.home'))
